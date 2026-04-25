@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 
+
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
   disabled?: boolean;
@@ -18,10 +19,9 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
   const SILENCE_DELAY = 2000;
 
   const startListening = useCallback(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition: typeof window.SpeechRecognition }).webkitSpeechRecognition;
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionAPI) {
       alert("Speech recognition is not supported in this browser. Try Chrome.");
       return;
     }
@@ -30,7 +30,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
     cancelledRef.current = false;
     setTranscript("");
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionAPI();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
@@ -44,7 +44,6 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
       transcriptRef.current = current;
       setTranscript(current);
 
-      // Reset silence timer on every new speech result
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
         recognitionRef.current?.stop();
@@ -78,7 +77,6 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
 
   return (
     <div className="flex flex-col items-center gap-5">
-      {/* Sound wave + button */}
       <div className="relative flex items-center justify-center">
         {listening && (
           <div className="absolute flex items-end gap-0.5 h-16 pointer-events-none">
