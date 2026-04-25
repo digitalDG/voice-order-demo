@@ -33,7 +33,7 @@ Return JSON matching this structure:
   "pizzas": [{ "size": string, "crust": string, "toppings": string[], "quantity": number, "special_requests": string (optional) }],
   "other_items": [{ "name": string, "quantity": number, "size": "small"|"medium"|"large" (optional, for drinks), "special_requests": string (optional) }],
   "special_instructions": string (optional),
-  "uncertain_items": string[] (only list genuinely ambiguous items — e.g. unknown menu items, unclear quantities, contradictory requests. Do NOT flag normal defaults like missing crust or size),
+  "uncertain_items": string[] (flag genuinely ambiguous items — e.g. unknown menu items, unclear quantities, contradictory requests. Do NOT flag missing crust or size since those have defaults. DO flag "pizza toppings not specified" if a pizza is ordered with no toppings mentioned),
   "order_summary": string (a friendly one-sentence summary)
 }
 
