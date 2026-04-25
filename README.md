@@ -2,7 +2,7 @@
 
 A portfolio demo showcasing real-world AI engineering: voice input, LLM-based structured output extraction, streaming responses, and confidence-aware parsing.
 
-**Live demo:** (add Vercel URL here)
+**Live demo:** https://voice-order-demo.vercel.app
 
 ---
 
