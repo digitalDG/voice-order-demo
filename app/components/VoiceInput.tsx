@@ -1,79 +1,177 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
   disabled?: boolean;
 }
 
+function getSupportedMimeType(): string {
+  const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+  return types.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+}
+
+const SILENCE_MS = 3000;
+
 export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsReadyRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const transcriptRef = useRef("");
   const cancelledRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioBufferRef = useRef<Blob[]>([]);
 
-  const SILENCE_DELAY = 2000;
-
-  const startListening = useCallback(() => {
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionAPI) {
-      alert("Speech recognition is not supported in this browser. Try Chrome.");
-      return;
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
+  }, []);
 
-    transcriptRef.current = "";
-    cancelledRef.current = false;
-    setTranscript("");
+  const cleanup = useCallback(() => {
+    clearSilenceTimer();
+    mediaRecorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaRecorderRef.current = null;
+    streamRef.current = null;
+    audioBufferRef.current = [];
+  }, [clearSilenceTimer]);
 
-    const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
+  const closeWs = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+    wsRef.current = null;
+    wsReadyRef.current = false;
+  }, []);
 
-    recognition.onstart = () => setListening(true);
+  const prewarm = useCallback(async () => {
+    try {
+      const res = await fetch("/api/deepgram-token");
+      const { key } = await res.json();
+      const ws = new WebSocket(
+        `wss://api.deepgram.com/v1/listen?model=nova-3&language=en-US&smart_format=true&interim_results=true&endpointing=800&vad_events=true`,
+        ["token", key]
+      );
+      wsRef.current = ws;
+      ws.onopen = () => { wsReadyRef.current = true; };
+      ws.onerror = () => { wsReadyRef.current = false; wsRef.current = null; };
+      ws.onclose = () => { wsReadyRef.current = false; };
+    } catch { /* silently fail */ }
+  }, []);
 
-    recognition.onresult = (event) => {
-      const current = Array.from(event.results)
-        .map((r) => r[0].transcript)
-        .join("");
-      transcriptRef.current = current;
-      setTranscript(current);
+  useEffect(() => {
+    prewarm();
+    return () => { cleanup(); closeWs(); };
+  }, [prewarm, cleanup, closeWs]);
 
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        recognitionRef.current?.stop();
-      }, SILENCE_DELAY);
+  const stopListening = useCallback(() => {
+    cleanup();
+    closeWs();
+  }, [cleanup, closeWs]);
+
+  const resetSilenceTimer = useCallback(() => {
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => stopListening(), SILENCE_MS);
+  }, [clearSilenceTimer, stopListening]);
+
+  const attachWsHandlers = useCallback((ws: WebSocket) => {
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "UtteranceEnd") {
+        if (transcriptRef.current) stopListening();
+        return;
+      }
+      const text = data?.channel?.alternatives?.[0]?.transcript;
+      if (!text) return;
+      resetSilenceTimer();
+      if (data.is_final) {
+        transcriptRef.current += (transcriptRef.current ? " " : "") + text;
+        setTranscript(transcriptRef.current);
+      } else {
+        setTranscript(transcriptRef.current + (transcriptRef.current ? " " : "") + text);
+      }
+      if (data.speech_final && transcriptRef.current) stopListening();
     };
 
-    recognition.onend = () => {
+    ws.onclose = () => {
       setListening(false);
       if (!cancelledRef.current && transcriptRef.current) {
         onTranscript(transcriptRef.current);
       }
+      cleanup();
+      prewarm();
     };
 
-    recognition.onerror = () => setListening(false);
+    ws.onerror = () => { setListening(false); cleanup(); };
+  }, [cleanup, stopListening, resetSilenceTimer, onTranscript, prewarm]);
 
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [onTranscript]);
+  const startListening = useCallback(async () => {
+    cancelledRef.current = false;
+    transcriptRef.current = "";
+    audioBufferRef.current = [];
+    setTranscript("");
 
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-  }, []);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimeType = getSupportedMimeType();
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = mediaRecorder;
+
+      // Start recording immediately — buffer chunks until WS is ready
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size === 0) return;
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          if (audioBufferRef.current.length > 0) {
+            audioBufferRef.current.forEach((chunk) => ws.send(chunk));
+            audioBufferRef.current = [];
+          }
+          ws.send(e.data);
+        } else {
+          audioBufferRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.start(100);
+      setListening(true);
+      resetSilenceTimer();
+
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        attachWsHandlers(ws);
+      } else {
+        // Open fresh WS — buffered audio will flush when it opens
+        const res = await fetch("/api/deepgram-token");
+        const { key } = await res.json();
+        const freshWs = new WebSocket(
+          `wss://api.deepgram.com/v1/listen?model=nova-3&language=en-US&smart_format=true&interim_results=true&endpointing=800&vad_events=true`,
+          ["token", key]
+        );
+        wsRef.current = freshWs;
+        freshWs.onopen = () => { wsReadyRef.current = true; };
+        attachWsHandlers(freshWs);
+      }
+    } catch {
+      setListening(false);
+      cleanup();
+    }
+  }, [attachWsHandlers, cleanup, resetSilenceTimer]);
 
   const cancelListening = useCallback(() => {
     cancelledRef.current = true;
     transcriptRef.current = "";
     setTranscript("");
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    recognitionRef.current?.stop();
-  }, []);
+    setListening(false);
+    stopListening();
+  }, [stopListening]);
 
   return (
     <div className="flex flex-col items-center gap-5">

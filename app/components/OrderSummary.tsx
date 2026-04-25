@@ -12,8 +12,8 @@ function getIcon(name: string) {
   if (n.includes("bread") || n.includes("garlic")) return "🥖";
   if (n.includes("wing")) return "🍗";
   if (n.includes("salad")) return "🥗";
-  if (n.includes("tiramisu")) return "☕";
-  if (n.includes("cannoli")) return "🧁";
+  if (n.includes("tiramisu")) return "🍮";
+  if (n.includes("cannoli")) return "🥐";
   if (n.includes("lava") || n.includes("cake") || n.includes("cheesecake")) return "🍰";
   if (n.includes("lemonade")) return "🍋";
   if (n.includes("iced tea") || n.includes("tea")) return "🧋";

@@ -26,6 +26,7 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleTranscript(transcript: string) {
+    if (!transcript?.trim()) return;
     setState("loading");
     setStreamingText("");
     setError("");
@@ -100,6 +101,7 @@ export default function Home() {
           <p className="text-gray-500 text-sm">
             Try: <span className="text-gray-300 italic">&ldquo;Large pepperoni thin crust with extra cheese and a garlic bread&rdquo;</span>
           </p>
+          <p className="text-gray-600 text-xs">Speak a full sentence for best results</p>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             className="text-xs text-red-400 hover:text-red-300 underline transition-colors"
@@ -164,9 +166,10 @@ export default function Home() {
       )}
 
       {/* Order history */}
-      {orderHistory.length > 1 && (
-        <OrderHistory orders={orderHistory.slice(1)} />
-      )}
+      {state === "success"
+        ? orderHistory.length > 1 && <OrderHistory orders={orderHistory.slice(1)} />
+        : orderHistory.length > 0 && <OrderHistory orders={orderHistory} />
+      }
 
       <p className="text-xs text-gray-600">Powered by Claude AI · Demo project</p>
     </main>
