@@ -23,7 +23,7 @@ Uses the Anthropic SDK's streaming API (`client.messages.stream`) so the UI can 
 Claude returns JSON conforming to a strict schema (pizzas, sizes, crusts, toppings, sides, drinks with sizes, desserts). Output is validated client-side with Zod — malformed responses are caught and surfaced gracefully.
 
 ### Confidence-aware parsing
-Claude flags genuinely ambiguous inputs (unknown menu items, contradictory requests) in an `uncertain_items` field. These surface as a "Needs clarification" warning in the UI — the system is transparent about uncertainty rather than silently guessing.
+Claude flags genuinely ambiguous inputs (unknown menu items, contradictory requests, missing toppings) in an `uncertain_items` field. These surface as a "Needs clarification" warning in the UI — the system is transparent about uncertainty rather than silently guessing. For example, ordering a pizza with no toppings specified triggers a clarification prompt rather than accepting an incomplete order.
 
 ### Prompt engineering with menu context
 The system prompt includes the full menu (sizes, crusts, toppings, drinks, desserts) so Claude can validate items against what's actually available. Off-menu items are flagged or omitted. Common aliases (e.g. "hamburger" → ground beef) are explicitly handled.
@@ -73,7 +73,7 @@ ANTHROPIC_API_KEY=your_key_here
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in Chrome (Chrome has the best Web Speech API support).
+Open [http://localhost:3000](http://localhost:3000). Use Chrome or Edge on desktop, Safari on iPhone. Firefox is not supported (Web Speech API not implemented).
 
 ---
 
