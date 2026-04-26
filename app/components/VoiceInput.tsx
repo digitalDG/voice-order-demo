@@ -61,7 +61,11 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
       wsRef.current = ws;
       ws.onopen = () => { wsReadyRef.current = true; };
       ws.onerror = () => { wsReadyRef.current = false; wsRef.current = null; };
-      ws.onclose = () => { wsReadyRef.current = false; };
+      ws.onclose = () => {
+        wsReadyRef.current = false;
+        // Re-prewarm if this was an idle connection (not mid-session)
+        if (!mediaRecorderRef.current) prewarm();
+      };
     } catch { /* silently fail */ }
   }, []);
 
