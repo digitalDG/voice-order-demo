@@ -25,6 +25,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
   const cancelledRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioBufferRef = useRef<Blob[]>([]);
+  const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const clearSilenceTimer = useCallback(() => {
     if (silenceTimerRef.current) {
@@ -43,6 +44,10 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
   }, [clearSilenceTimer]);
 
   const closeWs = useCallback(() => {
+    if (keepaliveIntervalRef.current) {
+      clearInterval(keepaliveIntervalRef.current);
+      keepaliveIntervalRef.current = null;
+    }
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.close();
     }
@@ -59,10 +64,22 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         ["token", key]
       );
       wsRef.current = ws;
-      ws.onopen = () => { wsReadyRef.current = true; };
+      ws.onopen = () => {
+        wsReadyRef.current = true;
+        // Keep idle connection alive so it's ready when user clicks
+        keepaliveIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN && !mediaRecorderRef.current) {
+            ws.send(JSON.stringify({ type: "KeepAlive" }));
+          }
+        }, 8000);
+      };
       ws.onerror = () => { wsReadyRef.current = false; wsRef.current = null; };
       ws.onclose = () => {
         wsReadyRef.current = false;
+        if (keepaliveIntervalRef.current) {
+          clearInterval(keepaliveIntervalRef.current);
+          keepaliveIntervalRef.current = null;
+        }
         // Re-prewarm if this was an idle connection (not mid-session)
         if (!mediaRecorderRef.current) prewarm();
       };
