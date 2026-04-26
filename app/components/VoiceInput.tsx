@@ -128,6 +128,21 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
     ws.onerror = () => { setListening(false); cleanup(); };
   }, [cleanup, stopListening, resetSilenceTimer, onTranscript, prewarm]);
 
+  const playReadyTone = useCallback(() => {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.12);
+    } catch { /* silently fail */ }
+  }, []);
+
   const startMediaRecorder = useCallback((ws: WebSocket) => {
     const stream = streamRef.current!;
     const mimeType = getSupportedMimeType();
@@ -137,6 +152,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
       if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) ws.send(e.data);
     };
     mediaRecorder.start(100);
+    playReadyTone();
     setListening(true);
     resetSilenceTimer();
   }, [resetSilenceTimer]);
