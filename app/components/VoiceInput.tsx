@@ -13,7 +13,7 @@ function getSupportedMimeType(): string {
 }
 
 const SILENCE_MS = 3000;
-const DG_URL = `wss://api.deepgram.com/v1/listen?model=nova-3&language=en-US&smart_format=true&interim_results=true&endpointing=1500&vad_events=true`;
+const DG_URL = `wss://api.deepgram.com/v1/listen?model=nova-3&language=en-US&smart_format=true&interim_results=true&endpointing=1000&vad_events=true`;
 
 export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
   const [listening, setListening] = useState(false);
