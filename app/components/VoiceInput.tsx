@@ -43,13 +43,10 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
   const cleanup = useCallback(() => {
     clearSilenceTimer();
     mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
-  }, [clearSilenceTimer]);
-
-  const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaRecorderRef.current = null;
     streamRef.current = null;
-  }, []);
+  }, [clearSilenceTimer]);
 
   const closeWs = useCallback(() => {
     clearKeepalive();
@@ -87,7 +84,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
 
   useEffect(() => {
     prewarm();
-    return () => { cleanup(); releaseStream(); closeWs(); };
+    return () => { cleanup(); closeWs(); };
   }, [prewarm, cleanup, closeWs]);
 
   const stopListening = useCallback(() => {
@@ -177,10 +174,8 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
     setTranscript("");
 
     try {
-      if (!streamRef.current) {
-        streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
-      const stream = streamRef.current;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
       const existingWs = wsRef.current;
       if (existingWs && existingWs.readyState === WebSocket.OPEN) {
